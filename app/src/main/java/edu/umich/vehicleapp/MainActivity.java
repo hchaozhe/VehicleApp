@@ -8,7 +8,16 @@ import android.content.DialogInterface;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.widget.ArrayAdapter;
+
+import com.github.pires.obd.commands.SpeedCommand;
+import com.github.pires.obd.commands.engine.RPMCommand;
+import com.github.pires.obd.commands.protocol.EchoOffCommand;
+import com.github.pires.obd.commands.protocol.LineFeedOffCommand;
+import com.github.pires.obd.commands.protocol.SelectProtocolCommand;
+import com.github.pires.obd.commands.protocol.TimeoutCommand;
+import com.github.pires.obd.enums.ObdProtocols;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -55,6 +64,7 @@ public class MainActivity extends AppCompatActivity {
                 dialog.dismiss();
                 int position = ((AlertDialog) dialog).getListView().getCheckedItemPosition();
                 deviceAddress = devices.get(position).toString();
+                new ConnectDeviceTask().execute();
             }
         });
 
@@ -62,10 +72,10 @@ public class MainActivity extends AppCompatActivity {
         alertDialog.show();
     }
 
-    private class ConnectDeviceTask extends AsyncTask<String, Integer, Void> {
+    private class ConnectDeviceTask extends AsyncTask<Void, Integer, Void> {
 
         @Override
-        protected Void doInBackground(String... strings) {
+        protected Void doInBackground(Void... voids) {
             BluetoothAdapter btAdapter = BluetoothAdapter.getDefaultAdapter();
 
             BluetoothDevice device = btAdapter.getRemoteDevice(deviceAddress);
@@ -75,16 +85,40 @@ public class MainActivity extends AppCompatActivity {
             try {
                 socket = device.createInsecureRfcommSocketToServiceRecord(uuid);
                 socket.connect();
-            }
-            catch (IOException exp) {
-                System.out.print(exp);
+            } catch (IOException exp) {
+                Log.d("SPEED_INFO", exp.getMessage());
             }
 
+            initConnection();
+            getTestInfo();
             return null;
         }
-    }
 
-    
+        private void initConnection() {
+            try {
+                new EchoOffCommand().run(socket.getInputStream(), socket.getOutputStream());
+                new LineFeedOffCommand().run(socket.getInputStream(), socket.getOutputStream());
+                new TimeoutCommand(125).run(socket.getInputStream(), socket.getOutputStream());
+                new SelectProtocolCommand(ObdProtocols.AUTO).run(socket.getInputStream(), socket.getOutputStream());
+            } catch (Exception e) {
+                Log.v("SPEED_INFO", e.getMessage());
+            }
+        }
+
+        private void getTestInfo() {
+            RPMCommand rpmCommand = new RPMCommand();
+            SpeedCommand speedCommand = new SpeedCommand();
+
+            try {
+                rpmCommand.run(socket.getInputStream(), socket.getOutputStream());
+                speedCommand.run(socket.getInputStream(), socket.getOutputStream());
+            } catch (Exception e) {
+                Log.v("SPEED_INFO", e.getMessage());
+            }
+            Log.d("SPEED_INFO", speedCommand.getFormattedResult());
+            Log.d("SPEED_INFO", rpmCommand.getFormattedResult());
+        }
+    }
 }
 
 
